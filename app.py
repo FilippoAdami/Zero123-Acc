@@ -4,6 +4,7 @@ import fire
 import numpy as np
 import time
 import torch
+import gc
 from contextlib import nullcontext
 from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from einops import rearrange
@@ -19,6 +20,7 @@ from ldm.models.diffusion.ddpm import LatentDiffusion
 
 _GLOBAL_MODELS = None
 _GLOBAL_DEVICE = None
+_GLOBAL_SAMPLER = None
 
 def load_zero123_ld(state_dict_path='./checkpoints', config_path='./config/latent_diffusion.yml', **kwargs):
     config = omegaconf.OmegaConf.load(config_path)
@@ -72,7 +74,6 @@ def sample_model(input_im, model, sampler, precision, h, w, ddim_steps, n_sample
 
             x_samples_ddim = model.decode_first_stage(samples_ddim)
             del samples_ddim, cond, uc, c, T
-            torch.cuda.empty_cache()
             return torch.clamp((x_samples_ddim + 1.0) / 2.0, min=0.0, max=1.0).cpu()
 
 def preprocess_image(models, input_im, preprocess_flag, device):
@@ -94,7 +95,7 @@ def preprocess_image(models, input_im, preprocess_flag, device):
     return input_im
 
 def _initialize_zero123_models(device_str: str = 'cuda:0', ckpt_path: str = './checkpoints', device_map_path: str = None):
-    global _GLOBAL_MODELS, _GLOBAL_DEVICE
+    global _GLOBAL_MODELS, _GLOBAL_DEVICE, _GLOBAL_SAMPLER
 
     if _GLOBAL_MODELS is not None:
         print("Models already initialized. Skipping re-initialization.")
@@ -113,6 +114,8 @@ def _initialize_zero123_models(device_str: str = 'cuda:0', ckpt_path: str = './c
         device_map=device_map,
         offload_folder='/tmp'
     )
+    _GLOBAL_SAMPLER = DDIMSampler(_GLOBAL_MODELS['turncam'])
+
     _GLOBAL_MODELS['carvekit'] = create_carvekit_interface()
     print('Instantiating AutoFeatureExtractor...')
     _GLOBAL_MODELS['clip_fe'] = AutoFeatureExtractor.from_pretrained('CompVis/stable-diffusion-safety-checker')
@@ -121,14 +124,13 @@ def _initialize_zero123_models(device_str: str = 'cuda:0', ckpt_path: str = './c
     return _GLOBAL_MODELS, _GLOBAL_DEVICE
 
 def generate_novel_view(img_path: str, n_steps: int = 75, guidance_scale: float = 3.0, hor_angle: float = 0.0, ver_angle: float = 0.0, zoom: float = 0.0, preprocess: bool = True, output_height: int = 256, output_width: int = 256, output_dir: str = 'output_images', device: str = 'cuda:0', ckpt_path: str = './checkpoints', device_map_path: str = None) -> None:
-    global _GLOBAL_MODELS, _GLOBAL_DEVICE
+    global _GLOBAL_MODELS, _GLOBAL_DEVICE, _GLOBAL_SAMPLER
 
     if _GLOBAL_MODELS is None or _GLOBAL_DEVICE != device:
         _initialize_zero123_models(device_str=device, ckpt_path=ckpt_path, device_map_path=device_map_path)
     models = _GLOBAL_MODELS
     inference_device = _GLOBAL_DEVICE
-
-    torch.cuda.empty_cache()
+    sampler = _GLOBAL_SAMPLER
 
     try:
         img = Image.open(img_path).convert('RGBA')
@@ -144,8 +146,6 @@ def generate_novel_view(img_path: str, n_steps: int = 75, guidance_scale: float 
     input_im_tensor = torch.from_numpy(input_im_array).permute(2, 0, 1).unsqueeze(0).to(inference_device)
     input_im_tensor = input_im_tensor * 2 - 1
     input_im_tensor = transforms.functional.resize(input_im_tensor, [output_height, output_width])
-
-    sampler = DDIMSampler(models['turncam'])
 
     print(f"\nGenerating new view for image '{os.path.basename(img_path)}' with parameters:")
     print(f"  Horizontal Angle: {hor_angle}°")
@@ -183,7 +183,8 @@ def generate_novel_view(img_path: str, n_steps: int = 75, guidance_scale: float 
         out_img.save(output_path)
         print(f"Generated image saved to: {output_path}")
 
-    del input_im_tensor, x_samples_ddim, sampler
+    del input_im_tensor, x_samples_ddim, output_ims
+    gc.collect()
     torch.cuda.empty_cache()
     torch.cuda.ipc_collect()
 
