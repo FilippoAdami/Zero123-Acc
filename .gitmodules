@@ -1,0 +1,12 @@
+[submodule "zero123"]
+	path = zero123
+	url = https://github.com/cvlab-columbia/zero123.git
+[submodule "taming-transformers"]
+	path = taming-transformers
+	url = https://github.com/CompVis/taming-transformers.git
+[submodule "CLIP"]
+	path = CLIP
+	url = https://github.com/openai/CLIP.git
+[submodule "image-background-remove-tool"]
+	path = image-background-remove-tool
+	url = https://github.com/OPHoperHPO/image-background-remove-tool.git

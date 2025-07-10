@@ -1,0 +1,11 @@
+--- util.py	2023-05-11 12:33:37.820058300 +0200
++++ util.py	2023-05-12 15:18:16.868193878 +0200
+@@ -79,7 +79,7 @@
+     image = PIL.Image.fromarray(np.array(image))
+     
+     # resize image such that long edge is 512
+-    image.thumbnail([200, 200], Image.Resampling.LANCZOS)
++    image.thumbnail([200, 200], Image.LANCZOS)
+     image = add_margin(image, (255, 255, 255), size=256)
+     image = np.array(image)
+     
