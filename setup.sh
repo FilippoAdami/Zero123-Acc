@@ -1,36 +1,31 @@
 #!/bin/bash
 
-pin_and_add_path() {
-  local module="$1"
-  local commit_sha="$2"
-  local output=$(cd "$module" && git reset --hard "$commit_sha" && realpath . 2>&1)
-  local module_path=$(echo "$output" | tail -n 1)
-  if [ $? -eq 0 ]; then
-    export PYTHONPATH="${PYTHONPATH}:${module_path}"
-    printf "Added %s with commit %s to PYTHONPATH\n" "$module" "$commit_sha"
-  else
-    printf "Error: %s\n" "module_path"
-  fi
-}
+set -e  # Exit if any command fails
 
-# Add submodules to PYTHONPATH. Pin to specific commits.
-pin_and_add_path "taming-transformers" "3ba01b2"
-pin_and_add_path "CLIP" "a9b1bf5"
-pin_and_add_path "image-background-remove-tool" "2935e46"
-#
-pin_and_add_path "zero123" "78bc429"
-# Path to the vendored ldm code on the original zero123 repo
-zero123_path=$(echo $PYTHONPATH | awk -F: '{print $NF}')
-export PYTHONPATH="${PYTHONPATH}:${zero123_path}/zero123"
+echo "🚧 Uninstalling conflicting packages..."
+pip uninstall -y sentence-transformers torchaudio peft jax jaxlib flax pydantic || true
 
-# One requirements file to rule them all
-pip install -r requirements.txt
+echo "📦 Installing required dependencies..."
+pip install requirements.txt --no-cache-dir
 
-# Patching existing code - don't fork or vendor just for a couple of lines
-#
-# Make zero123's ldm source compatible with newer versions of lightning
-(cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_ddpm.patch)
-# Compatibility with newer PIL
-(cd ./zero123/zero123/ldm && patch < ../../../patches/ldm_util.patch)
+echo "📁 Cloning Zero123-accelerate repo..."
+git clone https://github.com/FilippoAdami/Zero123-Acc
+cd /content/Zero123-Acc
 
-echo $PYTHONPATH
+echo "🔁 Resetting submodules to known good commits..."
+cd taming-transformers && git reset --hard 3ba01b2 && cd ..
+cd CLIP && git reset --hard a9b1bf5 && cd ..
+cd image-background-remove-tool && git reset --hard 2935e46 && cd ..
+cd zero123 && git reset --hard 78bc429 && cd ..
+
+echo "🩹 Applying patch files..."
+cd ./zero123/zero123/ldm/models/diffusion && patch < ../../../../../patches/ldm_ddpm.patch && cd -
+cd ./zero123/zero123/ldm && patch < ../../../patches/ldm_util.patch && cd -
+
+echo "📦 Downloading model checkpoints..."
+mkdir -p checkpoints
+wget -q https://huggingface.co/learningdisorder/zero123/resolve/main/zero-123-sharded-5gb/shard-00001-of-00002.bin -P checkpoints
+wget -q https://huggingface.co/learningdisorder/zero123/resolve/main/zero-123-sharded-5gb/shard-00002-of-00002.bin -P checkpoints
+wget -q https://huggingface.co/learningdisorder/zero123/resolve/main/zero-123-sharded-5gb/.index.json -P checkpoints
+
+echo "✅ Setup complete!"
