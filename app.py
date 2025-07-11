@@ -167,7 +167,7 @@ def generate_novel_views(
                 input_im_tensor,
                 models['turncam'],
                 sampler,
-                precision='fp32',
+                precision='fp16',
                 h=output_height,
                 w=output_width,
                 ddim_steps=n_steps,
