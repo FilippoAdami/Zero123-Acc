@@ -6,7 +6,7 @@ echo "🚧 Uninstalling conflicting packages..."
 pip uninstall -y sentence-transformers torchaudio peft jax jaxlib flax pydantic || true
 
 echo "📦 Installing required dependencies..."
-pip install requirements.txt --no-cache-dir
+pip install -r requirements.txt --no-cache-dir
 
 echo "📁 Cloning Zero123-accelerate repo..."
 git clone https://github.com/FilippoAdami/Zero123-Acc
