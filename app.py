@@ -123,11 +123,24 @@ def _initialize_zero123_models(device_str: str = 'cuda:0', ckpt_path: str = './c
     print(f"Models initialized on {_GLOBAL_DEVICE}.")
     return _GLOBAL_MODELS, _GLOBAL_DEVICE
 
-def generate_novel_view(img_path: str, n_steps: int = 75, guidance_scale: float = 3.0, hor_angle: float = 0.0, ver_angle: float = 0.0, zoom: float = 0.0, preprocess: bool = True, output_height: int = 256, output_width: int = 256, output_dir: str = 'output_images', device: str = 'cuda:0', ckpt_path: str = './checkpoints', device_map_path: str = None) -> None:
+def generate_novel_views(
+        img_path: str,
+        n_steps: int = 45,
+        guidance_scale: float = 3.0,
+        zoom: float = 0.0,
+        preprocess: bool = True,
+        output_height: int = 256,
+        output_width: int = 256,
+        device: str = 'cuda:0',
+        ckpt_path: str = './checkpoints',
+        device_map_path: str = None
+    ) -> list[Image.Image]:
+
     global _GLOBAL_MODELS, _GLOBAL_DEVICE, _GLOBAL_SAMPLER
 
     if _GLOBAL_MODELS is None or _GLOBAL_DEVICE != device:
         _initialize_zero123_models(device_str=device, ckpt_path=ckpt_path, device_map_path=device_map_path)
+
     models = _GLOBAL_MODELS
     inference_device = _GLOBAL_DEVICE
     sampler = _GLOBAL_SAMPLER
@@ -137,56 +150,48 @@ def generate_novel_view(img_path: str, n_steps: int = 75, guidance_scale: float 
         print(f"Loaded input image from: {img_path}")
     except FileNotFoundError:
         print(f"Error: Input image not found at {img_path}")
-        return
+        return []
     except Exception as e:
         print(f"Error loading image {img_path}: {e}")
-        return
+        return []
 
     input_im_array = preprocess_image(models, img, preprocess, inference_device)
     input_im_tensor = torch.from_numpy(input_im_array).permute(2, 0, 1).unsqueeze(0).to(inference_device)
     input_im_tensor = input_im_tensor * 2 - 1
     input_im_tensor = transforms.functional.resize(input_im_tensor, [output_height, output_width])
 
-    print(f"\nGenerating new view for image '{os.path.basename(img_path)}' with parameters:")
-    print(f"  Horizontal Angle: {hor_angle}°")
-    print(f"  Vertical Angle: {ver_angle}°")
-    print(f"  Zoom: {zoom}")
-    print(f"  Steps: {n_steps}, Guidance Scale: {guidance_scale}")
+    # Define the 4 target angles
+    view_angles = [(-30, 0), (30, 0), (0, -30), (0, 30)]
+    output_ims = []
 
     with torch.no_grad():
-        x_samples_ddim = sample_model(
-            input_im_tensor,
-            models['turncam'],
-            sampler,
-            precision='fp32',
-            h=output_height,
-            w=output_width,
-            ddim_steps=n_steps,
-            n_samples=1,
-            scale=guidance_scale,
-            ddim_eta=1.0,
-            x=ver_angle,
-            y=hor_angle,
-            z=zoom
-        )
+        for ver_angle, hor_angle in view_angles:
+            print(f"Generating view: hor_angle={hor_angle}, ver_angle={ver_angle}, zoom={zoom}")
+            x_samples_ddim = sample_model(
+                input_im_tensor,
+                models['turncam'],
+                sampler,
+                precision='fp32',
+                h=output_height,
+                w=output_width,
+                ddim_steps=n_steps,
+                n_samples=1,
+                scale=guidance_scale,
+                ddim_eta=1.0,
+                x=ver_angle,
+                y=hor_angle,
+                z=zoom
+            )
+            for x_sample in x_samples_ddim:
+                x_sample = 255.0 * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                output_ims.append(Image.fromarray(x_sample.astype(np.uint8)))
 
-    output_ims = []
-    for i, x_sample in enumerate(x_samples_ddim):
-        x_sample = 255.0 * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
-        output_ims.append(Image.fromarray(x_sample.astype(np.uint8)))
-
-    os.makedirs(output_dir, exist_ok=True)
-    base_name = os.path.splitext(os.path.basename(img_path))[0]
-    for i, out_img in enumerate(output_ims):
-        output_filename = f"{base_name}_H{hor_angle}_V{ver_angle}_Z{zoom}_{i}.png"
-        output_path = os.path.join(output_dir, output_filename)
-        out_img.save(output_path)
-        print(f"Generated image saved to: {output_path}")
-
-    del input_im_tensor, x_samples_ddim, output_ims
+    del input_im_tensor, x_samples_ddim
     gc.collect()
     torch.cuda.empty_cache()
     torch.cuda.ipc_collect()
 
+    return output_ims
+
 if __name__ == '__main__':
-    fire.Fire(generate_novel_view)
+    fire.Fire(generate_novel_views)

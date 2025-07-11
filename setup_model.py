@@ -1,6 +1,5 @@
 import os
 import sys
-from app import _initialize_zero123_models
 
 ZERO123_ACC_REPO_PATH = '/content/Zero123-Acc'
 CONFIG_PATH = os.path.join(ZERO123_ACC_REPO_PATH, 'config', 'latent_diffusion.yml')
@@ -28,6 +27,7 @@ print("✅ Python path setup complete.")
 # --- Initialize models ---
 INFERENCE_DEVICE = 'cuda:0'
 print(f"⚙️ Initializing models on {INFERENCE_DEVICE}...")
+from app import _initialize_zero123_models
 
 _initialize_zero123_models(
     device_str=INFERENCE_DEVICE,
