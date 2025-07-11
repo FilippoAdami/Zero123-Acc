@@ -1,15 +1,13 @@
 import math
 import os
-import fire
 import numpy as np
 import time
 import torch
 import gc
 from contextlib import nullcontext
-from diffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 from einops import rearrange
 from ldm.models.diffusion.ddim import DDIMSampler
-from ldm.util import create_carvekit_interface, load_and_preprocess
+from ldm.util import load_and_preprocess
 import omegaconf
 from PIL import Image
 from rich import print 
@@ -115,8 +113,6 @@ def _initialize_zero123_models(device_str: str = 'cuda:0', ckpt_path: str = './c
         offload_folder='/tmp'
     )
     _GLOBAL_SAMPLER = DDIMSampler(_GLOBAL_MODELS['turncam'])
-
-    _GLOBAL_MODELS['carvekit'] = create_carvekit_interface()
     print('Instantiating AutoFeatureExtractor...')
     _GLOBAL_MODELS['clip_fe'] = AutoFeatureExtractor.from_pretrained('CompVis/stable-diffusion-safety-checker')
 
