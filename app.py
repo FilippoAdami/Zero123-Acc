@@ -190,5 +190,68 @@ def generate_novel_views(
 
     return output_ims
 
+
+def generate_novel_views_from_image(
+        img: Image.Image,
+        n_steps: int = 45,
+        guidance_scale: float = 3.0,
+        zoom: float = 0.0,
+        preprocess: bool = True,
+        output_height: int = 256,
+        output_width: int = 256,
+        device: str = 'cuda:0',
+        ckpt_path: str = './checkpoints',
+        device_map_path: str = None
+    ) -> list[Image.Image]:
+
+    global _GLOBAL_MODELS, _GLOBAL_DEVICE, _GLOBAL_SAMPLER
+
+    if _GLOBAL_MODELS is None or _GLOBAL_DEVICE != device:
+        _initialize_zero123_models(device_str=device, ckpt_path=ckpt_path, device_map_path=device_map_path)
+
+    models = _GLOBAL_MODELS
+    inference_device = _GLOBAL_DEVICE
+    sampler = _GLOBAL_SAMPLER
+
+    try:
+        img = img.convert('RGBA')
+        print(f"Loaded input image object.")
+    except Exception as e:
+        print(f"Error processing input image: {e}")
+        return []
+
+    input_im_array = preprocess_image(models, img, preprocess, inference_device)
+    input_im_tensor = torch.from_numpy(input_im_array).permute(2, 0, 1).unsqueeze(0).to(inference_device)
+    input_im_tensor = input_im_tensor * 2 - 1
+    input_im_tensor = transforms.functional.resize(input_im_tensor, [output_height, output_width])
+
+    # Define the 4 target angles
+    view_angles = [(-30, 0), (30, 0), (0, -30), (0, 30)]
+    output_ims = []
+
+    with torch.no_grad():
+        for ver_angle, hor_angle in view_angles:
+            print(f"Generating view: hor_angle={hor_angle}, ver_angle={ver_angle}, zoom={zoom}")
+            x_samples_ddim = sample_model(
+                input_im_tensor,
+                models['turncam'],
+                sampler,
+                precision='fp32',
+                h=output_height,
+                w=output_width,
+                ddim_steps=n_steps,
+                n_samples=1,
+                scale=guidance_scale,
+                ddim_eta=1.0,
+                x=ver_angle,
+                y=hor_angle,
+                z=zoom
+            )
+            for x_sample in x_samples_ddim:
+                x_sample = 255.0 * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
+                output_ims.append(Image.fromarray(x_sample.astype(np.uint8)))
+
+    del input_im_tensor,
+
 if __name__ == '__main__':
     fire.Fire(generate_novel_views)
