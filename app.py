@@ -251,7 +251,12 @@ def generate_novel_views_from_image(
                 x_sample = 255.0 * rearrange(x_sample.cpu().numpy(), 'c h w -> h w c')
                 output_ims.append(Image.fromarray(x_sample.astype(np.uint8)))
 
-    del input_im_tensor,
+    del input_im_tensor, x_samples_ddim
+    gc.collect()
+    torch.cuda.empty_cache()
+    torch.cuda.ipc_collect()
+
+    return output_ims
 
 if __name__ == '__main__':
     fire.Fire(generate_novel_views)
