@@ -16,13 +16,6 @@ from torch import autocast
 from torchvision import transforms
 from ldm.models.diffusion.ddpm import LatentDiffusion
 
-import tqdm
-from tqdm import tqdm as original_tqdm
-
-def silent_tqdm(*args, **kwargs):
-    kwargs['disable'] = True
-    return original_tqdm(*args, **kwargs)
-
 _GLOBAL_MODELS = None
 _GLOBAL_DEVICE = None
 _GLOBAL_SAMPLER = None
