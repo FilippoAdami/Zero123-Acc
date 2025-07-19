@@ -215,9 +215,9 @@ def generate_novel_views_from_image(
 
     try:
         img = img.convert('RGBA')
-        # print(f"Loaded input image object.")
+        print(f"Loaded input image object.")
     except Exception as e:
-        # print(f"Error processing input image: {e}")
+        print(f"Error processing input image: {e}")
         return []
 
     input_im_array = preprocess_image(models, img, preprocess, inference_device)
@@ -231,7 +231,7 @@ def generate_novel_views_from_image(
 
     with torch.no_grad():
         for ver_angle, hor_angle in view_angles:
-            # print(f"Generating view: hor_angle={hor_angle}, ver_angle={ver_angle}, zoom={zoom}")
+            print(f"Generating view: hor_angle={hor_angle}, ver_angle={ver_angle}, zoom={zoom}")
             x_samples_ddim = sample_model(
                 input_im_tensor,
                 models['turncam'],
